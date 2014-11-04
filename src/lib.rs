@@ -88,8 +88,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
 
             loop {
-                let mut buffer: CVec<u8> = unsafe { CVec::new(std::mem::transmute(ptr),
-                    size as uint * nmemb as uint) };
+                let mut buffer: CVec<u8> = unsafe { CVec::new(ptr, size as uint * nmemb as uint) };
                 let buffer = buffer.as_mut_slice();
 
                 match data.reader.read(buffer) {
@@ -145,7 +144,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
             callbacks
         };
 
-        let mut data = DecoderData {
+        let mut data = box DecoderData {
             vorbis: unsafe { std::mem::uninitialized() },
             reader: input,
             current_logical_bitstream: 0,
@@ -154,14 +153,14 @@ impl<R> Decoder<R> where R: Reader + Seek {
 
         // initializing
         unsafe {
-            let data_ptr = &mut data as *mut DecoderData<R>;
+            let data_ptr = &mut *data as *mut DecoderData<R>;
             let data_ptr = data_ptr as *mut libc::c_void;
             try!(check_errors(vorbisfile_sys::ov_open_callbacks(data_ptr, &mut data.vorbis,
                 std::ptr::null(), 0, callbacks)));
         }
 
         Ok(Decoder {
-            data: box data,
+            data: data,
             nosync: std::kinds::marker::NoSync,
         })
     }
