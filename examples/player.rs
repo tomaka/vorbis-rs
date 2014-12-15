@@ -1,5 +1,3 @@
-#![feature(tuple_indexing)]
-
 extern crate vorbis;
 extern crate openal;
 extern crate time;
@@ -13,7 +11,7 @@ use openal::alc;
 
 fn main() {
     let device = alc::Device::open(None).expect("Could not open device");
-    let ctx = device.create_context([]).expect("Could not create context");
+    let ctx = device.create_context(&[]).expect("Could not create context");
     ctx.make_current();
 
     let source = al::Source::gen();
@@ -54,8 +52,8 @@ fn main() {
 
         // feeding OpenAL with our buffer
         let format = match packet.channels {
-            1 => al::FormatMono16,
-            2 => al::FormatStereo16,
+            1 => al::Format::FormatMono16,
+            2 => al::Format::FormatStereo16,
             _ => unimplemented!()
         };
 

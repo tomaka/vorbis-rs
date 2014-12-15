@@ -1,4 +1,3 @@
-#![feature(tuple_indexing)]
 #![feature(unsafe_destructor)]
 
 extern crate "ogg-sys" as ogg_sys;
@@ -30,17 +29,17 @@ pub enum VorbisError {
 impl std::error::Error for VorbisError {
     fn description(&self) -> &str {
         match self {
-            &ReadError(_) => "A read from media returned an error",
-            &NotVorbis => "Bitstream does not contain any Vorbis data",
-            &VersionMismatch => "Vorbis version mismatch",
-            &BadHeader => "Invalid Vorbis bitstream header",
-            &InitialFileHeadersCorrupt => "Initial file headers are corrupt",
+            &VorbisError::ReadError(_) => "A read from media returned an error",
+            &VorbisError::NotVorbis => "Bitstream does not contain any Vorbis data",
+            &VorbisError::VersionMismatch => "Vorbis version mismatch",
+            &VorbisError::BadHeader => "Invalid Vorbis bitstream header",
+            &VorbisError::InitialFileHeadersCorrupt => "Initial file headers are corrupt",
         }
     }
 
     fn cause(&self) -> Option<&std::error::Error> {
         match self {
-            &ReadError(ref err) => Some(err as &std::error::Error+'static),
+            &VorbisError::ReadError(ref err) => Some(err as &std::error::Error),
             _ => None
         }
     }
@@ -48,7 +47,7 @@ impl std::error::Error for VorbisError {
 
 impl std::error::FromError<std::io::IoError> for VorbisError {
     fn from_error(err: std::io::IoError) -> VorbisError {
-        ReadError(err)
+        VorbisError::ReadError(err)
     }
 }
 
@@ -181,7 +180,7 @@ impl<'a, R> Iterator<Result<Packet, VorbisError>> for PacketsIter<'a, R> where R
         } {
             0 => {
                 match self.0.read_error.take() {
-                    Some(err) => Some(Err(ReadError(err))),
+                    Some(err) => Some(Err(VorbisError::ReadError(err))),
                     None => None,
                 }
             },
@@ -228,10 +227,10 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
     match code {
         0 => Ok(()),
 
-        vorbis_sys::OV_ENOTVORBIS => Err(NotVorbis),
-        vorbis_sys::OV_EVERSION => Err(VersionMismatch),
-        vorbis_sys::OV_EBADHEADER => Err(BadHeader),
-        vorbis_sys::OV_EINVAL => Err(InitialFileHeadersCorrupt),
+        vorbis_sys::OV_ENOTVORBIS => Err(VorbisError::NotVorbis),
+        vorbis_sys::OV_EVERSION => Err(VorbisError::VersionMismatch),
+        vorbis_sys::OV_EBADHEADER => Err(VorbisError::BadHeader),
+        vorbis_sys::OV_EINVAL => Err(VorbisError::InitialFileHeadersCorrupt),
 
         vorbis_sys::OV_EREAD => unimplemented!(),
 
