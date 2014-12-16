@@ -5,6 +5,3 @@ authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 
 [dependencies.vorbisfile-sys]
 git = "https://github.com/tomaka/vorbisfile-sys"
-
-[dev-dependencies.openal-rs]
-git = "https://github.com/bjz/openal-rs"
