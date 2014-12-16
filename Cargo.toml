@@ -2,6 +2,9 @@
 name = "vorbis"
 version = "0.0.1"
 authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
+description = "High-level bindings for the official libvorbis library."
+repository = "https://github.com/tomaka/vorbis-rs"
+license = "Apache-2.0"
 
-[dependencies.vorbisfile-sys]
-git = "https://github.com/tomaka/vorbisfile-sys"
+[dependencies]
+vorbisfile-sys = "*"
