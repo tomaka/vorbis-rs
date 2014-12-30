@@ -58,6 +58,8 @@ struct DecoderData<R> where R: Reader + Seek {
     read_error: Option<std::io::IoError>,
 }
 
+unsafe impl<R: Reader + Seek + Send> Send for DecoderData<R> {}
+
 /// Packet of data.
 ///
 /// Each sample is an `i16` ranging from I16_MIN to I16_MAX.
