@@ -1,3 +1,4 @@
+#![feature(associated_types)]
 #![feature(unsafe_destructor)]
 
 extern crate "ogg-sys" as ogg_sys;
@@ -17,7 +18,7 @@ pub struct Decoder<R> where R: Reader + Seek {
 pub struct PacketsIter<'a, R: 'a + Reader + Seek>(&'a mut DecoderData<R>);
 
 /// Errors that can happen while decoding
-#[deriving(Show, PartialEq, Eq)]
+#[derive(Show, PartialEq, Eq)]
 pub enum VorbisError {
     ReadError(std::io::IoError),
     NotVorbis,
@@ -66,7 +67,7 @@ unsafe impl<R: Reader + Seek + Send> Send for DecoderData<R> {}
 ///
 /// The channels are interleaved in the data. For example if you have two channels, you will
 /// get a sample from channel 1, then a sample from channel 2, than a sample from channel 1, etc.
-#[deriving(Clone, Show)]
+#[derive(Clone, Show)]
 pub struct Packet {
     pub data: Vec<i16>,
     pub channels: u16,
@@ -171,9 +172,11 @@ impl<R> Decoder<R> where R: Reader + Seek {
     }
 }
 
-impl<'a, R> Iterator<Result<Packet, VorbisError>> for PacketsIter<'a, R> where R: 'a + Reader + Seek {
+impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Reader + Seek {
+    type Item = Result<Packet, VorbisError>;
+
     fn next(&mut self) -> Option<Result<Packet, VorbisError>> {
-        let mut buffer = Vec::from_elem(2048, 0i16);
+        let mut buffer = std::iter::repeat(0i16).take(2048).collect::<Vec<_>>();
         let buffer_len = buffer.len() * 2;
 
         match unsafe {
