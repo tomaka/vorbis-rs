@@ -1,4 +1,3 @@
-#![feature(associated_types)]
 #![feature(unsafe_destructor)]
 
 extern crate "ogg-sys" as ogg_sys;
@@ -83,15 +82,15 @@ impl<R> Decoder<R> where R: Reader + Seek {
         extern fn read_func<R>(ptr: *mut libc::c_void, size: libc::size_t, nmemb: libc::size_t,
             datasource: *mut libc::c_void) -> libc::size_t where R: Reader + Seek
         {
-            use std::c_vec::CVec;
+            use std::slice;
 
             let mut ptr = ptr as *mut u8;
 
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
 
             loop {
-                let mut buffer: CVec<u8> = unsafe { CVec::new(ptr, size as uint * nmemb as uint) };
-                let buffer = buffer.as_mut_slice();
+                let buffer = ptr.clone();
+                let buffer = unsafe { slice::from_raw_mut_buf(&buffer, size as uint * nmemb as uint) };
 
                 match data.reader.read(buffer) {
                     Ok(0) => continue,
