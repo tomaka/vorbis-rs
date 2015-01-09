@@ -9,8 +9,6 @@ extern crate libc;
 pub struct Decoder<R> where R: Reader + Seek {
     // further informations are boxed so that a pointer can be passed to callbacks
     data: Box<DecoderData<R>>,
-    // the OggVorbis_File struct has no internal thread-safety
-    nosync: std::kinds::marker::NoSync,
 }
 
 /// 
@@ -90,7 +88,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
 
             loop {
                 let buffer = ptr.clone();
-                let buffer = unsafe { slice::from_raw_mut_buf(&buffer, size as uint * nmemb as uint) };
+                let buffer = unsafe { slice::from_raw_mut_buf(&buffer, size as usize * nmemb as usize) };
 
                 match data.reader.read(buffer) {
                     Ok(0) => continue,
@@ -98,7 +96,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
                         if buffer.len() == nb {
                             return nmemb;
                         } else {
-                            unsafe { ptr = ptr.offset(nb as int) };
+                            unsafe { ptr = ptr.offset(nb as isize) };
                         }
                     },
                     Err(ref e) if e.kind == std::io::EndOfFile => {
@@ -145,12 +143,12 @@ impl<R> Decoder<R> where R: Reader + Seek {
             callbacks
         };
 
-        let mut data = box DecoderData {
+        let mut data = Box::new(DecoderData {
             vorbis: unsafe { std::mem::uninitialized() },
             reader: input,
             current_logical_bitstream: 0,
             read_error: None,
-        };
+        });
 
         // initializing
         unsafe {
@@ -162,7 +160,6 @@ impl<R> Decoder<R> where R: Reader + Seek {
 
         Ok(Decoder {
             data: data,
-            nosync: std::kinds::marker::NoSync,
         })
     }
 
@@ -197,7 +194,7 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Reader + Seek {
             },
 
             len => {
-                buffer.truncate(len as uint);
+                buffer.truncate(len as usize);
 
                 let infos = unsafe { vorbisfile_sys::ov_info(&mut self.0.vorbis,
                     self.0.current_logical_bitstream) };
