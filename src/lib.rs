@@ -43,6 +43,12 @@ impl std::error::Error for VorbisError {
     }
 }
 
+impl std::fmt::String for VorbisError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(fmt, "{}", std::error::Error::description(self))
+    }
+}
+
 impl std::error::FromError<std::io::IoError> for VorbisError {
     fn from_error(err: std::io::IoError) -> VorbisError {
         VorbisError::ReadError(err)
