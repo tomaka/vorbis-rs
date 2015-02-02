@@ -1,4 +1,4 @@
-#![feature(unsafe_destructor)]
+#![feature(unsafe_destructor, io, libc, core)]
 
 extern crate "ogg-sys" as ogg_sys;
 extern crate "vorbis-sys" as vorbis_sys;
@@ -15,9 +15,9 @@ pub struct Decoder<R> where R: Reader + Seek {
 pub struct PacketsIter<'a, R: 'a + Reader + Seek>(&'a mut DecoderData<R>);
 
 /// Errors that can happen while decoding
-#[derive(Show, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum VorbisError {
-    ReadError(std::io::IoError),
+    ReadError(std::old_io::IoError),
     NotVorbis,
     VersionMismatch,
     BadHeader,
@@ -43,14 +43,14 @@ impl std::error::Error for VorbisError {
     }
 }
 
-impl std::fmt::String for VorbisError {
+impl std::fmt::Display for VorbisError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         write!(fmt, "{}", std::error::Error::description(self))
     }
 }
 
-impl std::error::FromError<std::io::IoError> for VorbisError {
-    fn from_error(err: std::io::IoError) -> VorbisError {
+impl std::error::FromError<std::old_io::IoError> for VorbisError {
+    fn from_error(err: std::old_io::IoError) -> VorbisError {
         VorbisError::ReadError(err)
     }
 }
@@ -59,7 +59,7 @@ struct DecoderData<R> where R: Reader + Seek {
     vorbis: vorbisfile_sys::OggVorbis_File,
     reader: R,
     current_logical_bitstream: libc::c_int,
-    read_error: Option<std::io::IoError>,
+    read_error: Option<std::old_io::IoError>,
 }
 
 unsafe impl<R: Reader + Seek + Send> Send for DecoderData<R> {}
@@ -70,7 +70,7 @@ unsafe impl<R: Reader + Seek + Send> Send for DecoderData<R> {}
 ///
 /// The channels are interleaved in the data. For example if you have two channels, you will
 /// get a sample from channel 1, then a sample from channel 2, than a sample from channel 1, etc.
-#[derive(Clone, Show)]
+#[derive(Clone, Debug)]
 pub struct Packet {
     pub data: Vec<i16>,
     pub channels: u16,
@@ -105,7 +105,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
                             unsafe { ptr = ptr.offset(nb as isize) };
                         }
                     },
-                    Err(ref e) if e.kind == std::io::EndOfFile => {
+                    Err(ref e) if e.kind == std::old_io::EndOfFile => {
                         return 0
                     },
                     Err(e) => {
@@ -122,9 +122,9 @@ impl<R> Decoder<R> where R: Reader + Seek {
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
 
             let result = match whence {
-                libc::SEEK_SET => data.reader.seek(offset, std::io::SeekSet),
-                libc::SEEK_CUR => data.reader.seek(offset, std::io::SeekCur),
-                libc::SEEK_END => data.reader.seek(offset, std::io::SeekEnd),
+                libc::SEEK_SET => data.reader.seek(offset, std::old_io::SeekSet),
+                libc::SEEK_CUR => data.reader.seek(offset, std::old_io::SeekCur),
+                libc::SEEK_END => data.reader.seek(offset, std::old_io::SeekEnd),
                 _ => unreachable!()
             };
 
