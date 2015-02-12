@@ -1,4 +1,4 @@
-#![feature(unsafe_destructor, io, libc, core)]
+#![feature(unsafe_destructor, io, core)]
 
 extern crate "ogg-sys" as ogg_sys;
 extern crate "vorbis-sys" as vorbis_sys;
@@ -94,7 +94,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
 
             loop {
                 let buffer = ptr.clone();
-                let buffer = unsafe { slice::from_raw_mut_buf(&buffer, size as usize * nmemb as usize) };
+                let buffer = unsafe { slice::from_raw_parts_mut(buffer, size as usize * nmemb as usize) };
 
                 match data.reader.read(buffer) {
                     Ok(0) => continue,
