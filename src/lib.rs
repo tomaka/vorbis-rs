@@ -5,19 +5,21 @@ extern crate "vorbis-sys" as vorbis_sys;
 extern crate "vorbisfile-sys" as vorbisfile_sys;
 extern crate libc;
 
+use std::io::{self, Read, Seek};
+
 /// Allows you to decode a sound file stream into packets.
-pub struct Decoder<R> where R: Reader + Seek {
+pub struct Decoder<R> where R: Read + Seek {
     // further informations are boxed so that a pointer can be passed to callbacks
     data: Box<DecoderData<R>>,
 }
 
 /// 
-pub struct PacketsIter<'a, R: 'a + Reader + Seek>(&'a mut DecoderData<R>);
+pub struct PacketsIter<'a, R: 'a + Read + Seek>(&'a mut DecoderData<R>);
 
 /// Errors that can happen while decoding
 #[derive(Debug, PartialEq, Eq)]
 pub enum VorbisError {
-    ReadError(std::old_io::IoError),
+    ReadError(io::Error),
     NotVorbis,
     VersionMismatch,
     BadHeader,
@@ -49,20 +51,20 @@ impl std::fmt::Display for VorbisError {
     }
 }
 
-impl std::error::FromError<std::old_io::IoError> for VorbisError {
-    fn from_error(err: std::old_io::IoError) -> VorbisError {
+impl std::error::FromError<io::Error> for VorbisError {
+    fn from_error(err: io::Error) -> VorbisError {
         VorbisError::ReadError(err)
     }
 }
 
-struct DecoderData<R> where R: Reader + Seek {
+struct DecoderData<R> where R: Read + Seek {
     vorbis: vorbisfile_sys::OggVorbis_File,
     reader: R,
     current_logical_bitstream: libc::c_int,
-    read_error: Option<std::old_io::IoError>,
+    read_error: Option<io::Error>,
 }
 
-unsafe impl<R: Reader + Seek + Send> Send for DecoderData<R> {}
+unsafe impl<R: Read + Seek + Send> Send for DecoderData<R> {}
 
 /// Packet of data.
 ///
@@ -81,10 +83,10 @@ pub struct Packet {
     pub bitrate_window: u64,
 }
 
-impl<R> Decoder<R> where R: Reader + Seek {
+impl<R> Decoder<R> where R: Read + Seek {
     pub fn new(input: R) -> Result<Decoder<R>, VorbisError> {
         extern fn read_func<R>(ptr: *mut libc::c_void, size: libc::size_t, nmemb: libc::size_t,
-            datasource: *mut libc::c_void) -> libc::size_t where R: Reader + Seek
+            datasource: *mut libc::c_void) -> libc::size_t where R: Read + Seek
         {
             use std::slice;
 
@@ -97,7 +99,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
                 let buffer = unsafe { slice::from_raw_parts_mut(buffer, size as usize * nmemb as usize) };
 
                 match data.reader.read(buffer) {
-                    Ok(0) => continue,
+                    Ok(0) => return 0,
                     Ok(nb) => {
                         if buffer.len() == nb {
                             return nmemb;
@@ -105,7 +107,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
                             unsafe { ptr = ptr.offset(nb as isize) };
                         }
                     },
-                    Err(ref e) if e.kind == std::old_io::EndOfFile => {
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
                         return 0
                     },
                     Err(e) => {
@@ -117,14 +119,14 @@ impl<R> Decoder<R> where R: Reader + Seek {
         }
 
         extern fn seek_func<R>(datasource: *mut libc::c_void, offset: ogg_sys::ogg_int64_t,
-            whence: libc::c_int) -> libc::c_int where R: Reader + Seek
+            whence: libc::c_int) -> libc::c_int where R: Read + Seek
         {
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
 
             let result = match whence {
-                libc::SEEK_SET => data.reader.seek(offset, std::old_io::SeekSet),
-                libc::SEEK_CUR => data.reader.seek(offset, std::old_io::SeekCur),
-                libc::SEEK_END => data.reader.seek(offset, std::old_io::SeekEnd),
+                libc::SEEK_SET => data.reader.seek(io::SeekFrom::Start(offset as u64)),
+                libc::SEEK_CUR => data.reader.seek(io::SeekFrom::Current(offset)),
+                libc::SEEK_END => data.reader.seek(io::SeekFrom::End(offset)),
                 _ => unreachable!()
             };
 
@@ -135,10 +137,10 @@ impl<R> Decoder<R> where R: Reader + Seek {
         }
 
         extern fn tell_func<R>(datasource: *mut libc::c_void) -> libc::c_long
-            where R: Reader + Seek
+            where R: Read + Seek
         {
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
-            data.reader.tell().unwrap_or(-1) as libc::c_long
+            data.reader.seek(io::SeekFrom::Current(0)).unwrap_or(-1) as libc::c_long
         }
 
         let callbacks = {
@@ -174,7 +176,7 @@ impl<R> Decoder<R> where R: Reader + Seek {
     }
 }
 
-impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Reader + Seek {
+impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
     type Item = Result<Packet, VorbisError>;
 
     fn next(&mut self) -> Option<Result<Packet, VorbisError>> {
@@ -222,7 +224,7 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Reader + Seek {
 }
 
 #[unsafe_destructor]
-impl<R> Drop for Decoder<R> where R: Reader + Seek {
+impl<R> Drop for Decoder<R> where R: Read + Seek {
     fn drop(&mut self) {
         unsafe {
             vorbisfile_sys::ov_clear(&mut self.data.vorbis);
