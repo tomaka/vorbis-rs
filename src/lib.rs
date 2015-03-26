@@ -1,8 +1,8 @@
-#![feature(unsafe_destructor, io, core)]
+#![feature(unsafe_destructor, io)]
 
-extern crate "ogg-sys" as ogg_sys;
-extern crate "vorbis-sys" as vorbis_sys;
-extern crate "vorbisfile-sys" as vorbisfile_sys;
+extern crate ogg_sys;
+extern crate vorbis_sys;
+extern crate vorbisfile_sys;
 extern crate libc;
 
 use std::io::{self, Read, Seek};
