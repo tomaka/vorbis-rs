@@ -1,5 +1,3 @@
-#![feature(unsafe_destructor, io)]
-
 extern crate ogg_sys;
 extern crate vorbis_sys;
 extern crate vorbisfile_sys;
@@ -17,7 +15,7 @@ pub struct Decoder<R> where R: Read + Seek {
 pub struct PacketsIter<'a, R: 'a + Read + Seek>(&'a mut DecoderData<R>);
 
 /// Errors that can happen while decoding
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum VorbisError {
     ReadError(io::Error),
     NotVorbis,
@@ -51,8 +49,8 @@ impl std::fmt::Display for VorbisError {
     }
 }
 
-impl std::error::FromError<io::Error> for VorbisError {
-    fn from_error(err: io::Error) -> VorbisError {
+impl From<io::Error> for VorbisError {
+    fn from(err: io::Error) -> VorbisError {
         VorbisError::ReadError(err)
     }
 }
@@ -140,7 +138,7 @@ impl<R> Decoder<R> where R: Read + Seek {
             where R: Read + Seek
         {
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
-            data.reader.seek(io::SeekFrom::Current(0)).unwrap_or(-1) as libc::c_long
+            data.reader.seek(io::SeekFrom::Current(0)).map(|v| v as libc::c_long).unwrap_or(-1)
         }
 
         let callbacks = {
@@ -223,7 +221,6 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
     }
 }
 
-#[unsafe_destructor]
 impl<R> Drop for Decoder<R> where R: Read + Seek {
     fn drop(&mut self) {
         unsafe {

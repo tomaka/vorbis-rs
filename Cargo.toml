@@ -1,6 +1,6 @@
 [package]
 name = "vorbis"
-version = "0.0.10"
+version = "0.0.11"
 authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "High-level bindings for the official libvorbis library."
 repository = "https://github.com/tomaka/vorbis-rs"
