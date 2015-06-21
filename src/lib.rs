@@ -202,7 +202,7 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
             },
 
             len => {
-                buffer.truncate(len as usize);
+                buffer.truncate(len as usize / 2);
 
                 let infos = unsafe { vorbisfile_sys::ov_info(&mut self.0.vorbis,
                     self.0.current_logical_bitstream) };
