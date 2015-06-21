@@ -22,6 +22,7 @@ pub enum VorbisError {
     VersionMismatch,
     BadHeader,
     InitialFileHeadersCorrupt,
+    Hole,
 }
 
 impl std::error::Error for VorbisError {
@@ -32,6 +33,7 @@ impl std::error::Error for VorbisError {
             &VorbisError::VersionMismatch => "Vorbis version mismatch",
             &VorbisError::BadHeader => "Invalid Vorbis bitstream header",
             &VorbisError::InitialFileHeadersCorrupt => "Initial file headers are corrupt",
+            &VorbisError::Hole => "Interruption of data",
         }
     }
 
@@ -237,6 +239,7 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
         vorbis_sys::OV_EVERSION => Err(VorbisError::VersionMismatch),
         vorbis_sys::OV_EBADHEADER => Err(VorbisError::BadHeader),
         vorbis_sys::OV_EINVAL => Err(VorbisError::InitialFileHeadersCorrupt),
+        vorbis_sys::OV_HOLE => Err(VorbisError::Hole),
 
         vorbis_sys::OV_EREAD => unimplemented!(),
 
