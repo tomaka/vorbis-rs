@@ -171,6 +171,12 @@ impl<R> Decoder<R> where R: Read + Seek {
         })
     }
 
+    pub fn time_seek(&mut self, s: f64) -> Result<(), VorbisError> {
+        unsafe {
+            check_errors(vorbisfile_sys::ov_time_seek(&mut self.data.vorbis, s))
+        }
+    }
+
     pub fn packets(&mut self) -> PacketsIter<R> {
         PacketsIter(&mut *self.data)
     }
