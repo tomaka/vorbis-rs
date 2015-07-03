@@ -90,31 +90,27 @@ impl<R> Decoder<R> where R: Read + Seek {
         {
             use std::slice;
 
-            let mut ptr = ptr as *mut u8;
+            /*
+             * In practice libvorbisfile always sets size to 1.
+             * This assumption makes things much simpler
+             */
+            assert_eq!(size, 1);
+
+            let ptr = ptr as *mut u8;
 
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
 
-            loop {
-                let buffer = ptr.clone();
-                let buffer = unsafe { slice::from_raw_parts_mut(buffer, size as usize * nmemb as usize) };
+            let buffer = unsafe { slice::from_raw_parts_mut(ptr as *mut u8, nmemb as usize) };
 
+            loop {
                 match data.reader.read(buffer) {
-                    Ok(0) => return 0,
-                    Ok(nb) => {
-                        if buffer.len() == nb {
-                            return nmemb;
-                        } else {
-                            unsafe { ptr = ptr.offset(nb as isize) };
-                        }
-                    },
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
-                        return 0
-                    },
+                    Ok(nb) => return nb as libc::size_t,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => (),
                     Err(e) => {
                         data.read_error = Some(e);
-                        return 0;
+                        return 0
                     }
-                };
+                }
             }
         }
 
@@ -257,6 +253,6 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
 
         // indicates a bug or heap/stack corruption
         vorbis_sys::OV_EFAULT => panic!("Internal libvorbis error"),
-        _ => panic!("Unknown vorbis error")
+        _ => panic!("Unknown vorbis error {}", code)
     }
 }
