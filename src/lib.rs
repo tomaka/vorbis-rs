@@ -22,6 +22,7 @@ pub enum VorbisError {
     VersionMismatch,
     BadHeader,
     InitialFileHeadersCorrupt,
+    Hole,
 }
 
 impl std::error::Error for VorbisError {
@@ -32,6 +33,7 @@ impl std::error::Error for VorbisError {
             &VorbisError::VersionMismatch => "Vorbis version mismatch",
             &VorbisError::BadHeader => "Invalid Vorbis bitstream header",
             &VorbisError::InitialFileHeadersCorrupt => "Initial file headers are corrupt",
+            &VorbisError::Hole => "Interruption of data",
         }
     }
 
@@ -88,31 +90,27 @@ impl<R> Decoder<R> where R: Read + Seek {
         {
             use std::slice;
 
-            let mut ptr = ptr as *mut u8;
+            /*
+             * In practice libvorbisfile always sets size to 1.
+             * This assumption makes things much simpler
+             */
+            assert_eq!(size, 1);
+
+            let ptr = ptr as *mut u8;
 
             let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
 
-            loop {
-                let buffer = ptr.clone();
-                let buffer = unsafe { slice::from_raw_parts_mut(buffer, size as usize * nmemb as usize) };
+            let buffer = unsafe { slice::from_raw_parts_mut(ptr as *mut u8, nmemb as usize) };
 
+            loop {
                 match data.reader.read(buffer) {
-                    Ok(0) => return 0,
-                    Ok(nb) => {
-                        if buffer.len() == nb {
-                            return nmemb;
-                        } else {
-                            unsafe { ptr = ptr.offset(nb as isize) };
-                        }
-                    },
-                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => {
-                        return 0
-                    },
+                    Ok(nb) => return nb as libc::size_t,
+                    Err(ref e) if e.kind() == io::ErrorKind::Interrupted => (),
                     Err(e) => {
                         data.read_error = Some(e);
-                        return 0;
+                        return 0
                     }
-                };
+                }
             }
         }
 
@@ -169,6 +167,18 @@ impl<R> Decoder<R> where R: Read + Seek {
         })
     }
 
+    pub fn time_seek(&mut self, s: f64) -> Result<(), VorbisError> {
+        unsafe {
+            check_errors(vorbisfile_sys::ov_time_seek(&mut self.data.vorbis, s))
+        }
+    }
+
+    pub fn time_tell(&mut self) -> Result<f64, VorbisError> {
+        unsafe {
+            Ok(vorbisfile_sys::ov_time_tell(&mut self.data.vorbis))
+        }
+    }
+
     pub fn packets(&mut self) -> PacketsIter<R> {
         PacketsIter(&mut *self.data)
     }
@@ -200,7 +210,7 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
             },
 
             len => {
-                buffer.truncate(len as usize);
+                buffer.truncate(len as usize / 2);
 
                 let infos = unsafe { vorbisfile_sys::ov_info(&mut self.0.vorbis,
                     self.0.current_logical_bitstream) };
@@ -237,11 +247,12 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
         vorbis_sys::OV_EVERSION => Err(VorbisError::VersionMismatch),
         vorbis_sys::OV_EBADHEADER => Err(VorbisError::BadHeader),
         vorbis_sys::OV_EINVAL => Err(VorbisError::InitialFileHeadersCorrupt),
+        vorbis_sys::OV_HOLE => Err(VorbisError::Hole),
 
         vorbis_sys::OV_EREAD => unimplemented!(),
 
         // indicates a bug or heap/stack corruption
         vorbis_sys::OV_EFAULT => panic!("Internal libvorbis error"),
-        _ => panic!("Unknown vorbis error")
+        _ => panic!("Unknown vorbis error {}", code)
     }
 }
