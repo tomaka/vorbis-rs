@@ -12,7 +12,10 @@ pub struct Decoder<R> where R: Read + Seek {
 }
 
 /// 
-pub struct PacketsIter<'a, R: 'a + Read + Seek>(&'a mut DecoderData<R>);
+pub struct PacketsIter<'a, R: 'a + Read + Seek>(&'a mut Decoder<R>);
+
+/// 
+pub struct PacketsIntoIter<R: Read + Seek>(Decoder<R>);
 
 /// Errors that can happen while decoding
 #[derive(Debug)]
@@ -180,23 +183,23 @@ impl<R> Decoder<R> where R: Read + Seek {
     }
 
     pub fn packets(&mut self) -> PacketsIter<R> {
-        PacketsIter(&mut *self.data)
+        PacketsIter(self)
     }
-}
 
-impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
-    type Item = Result<Packet, VorbisError>;
+    pub fn into_packets(self) -> PacketsIntoIter<R> {
+        PacketsIntoIter(self)
+    }
 
-    fn next(&mut self) -> Option<Result<Packet, VorbisError>> {
+    fn next_packet(&mut self) -> Option<Result<Packet, VorbisError>> {
         let mut buffer = std::iter::repeat(0i16).take(2048).collect::<Vec<_>>();
         let buffer_len = buffer.len() * 2;
 
         match unsafe {
-            vorbisfile_sys::ov_read(&mut self.0.vorbis, buffer.as_mut_ptr() as *mut i8,
-                buffer_len as libc::c_int, 0, 2, 1, &mut self.0.current_logical_bitstream)
+            vorbisfile_sys::ov_read(&mut self.data.vorbis, buffer.as_mut_ptr() as *mut i8,
+                buffer_len as libc::c_int, 0, 2, 1, &mut self.data.current_logical_bitstream)
         } {
             0 => {
-                match self.0.read_error.take() {
+                match self.data.read_error.take() {
                     Some(err) => Some(Err(VorbisError::ReadError(err))),
                     None => None,
                 }
@@ -212,8 +215,8 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
             len => {
                 buffer.truncate(len as usize / 2);
 
-                let infos = unsafe { vorbisfile_sys::ov_info(&mut self.0.vorbis,
-                    self.0.current_logical_bitstream) };
+                let infos = unsafe { vorbisfile_sys::ov_info(&mut self.data.vorbis,
+                    self.data.current_logical_bitstream) };
 
                 let infos: &vorbis_sys::vorbis_info = unsafe { std::mem::transmute(infos) };
 
@@ -228,6 +231,22 @@ impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
                 }))
             }
         }
+    }
+}
+
+impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
+    type Item = Result<Packet, VorbisError>;
+
+    fn next(&mut self) -> Option<Result<Packet, VorbisError>> {
+        self.0.next_packet()
+    }
+}
+
+impl<R> Iterator for PacketsIntoIter<R> where R: Read + Seek {
+    type Item = Result<Packet, VorbisError>;
+
+    fn next(&mut self) -> Option<Result<Packet, VorbisError>> {
+        self.0.next_packet()
     }
 }
 
