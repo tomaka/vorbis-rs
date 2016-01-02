@@ -195,7 +195,7 @@ impl<R> Decoder<R> where R: Read + Seek {
         let buffer_len = buffer.len() * 2;
 
         match unsafe {
-            vorbisfile_sys::ov_read(&mut self.data.vorbis, buffer.as_mut_ptr() as *mut i8,
+            vorbisfile_sys::ov_read(&mut self.data.vorbis, buffer.as_mut_ptr() as *mut libc::c_char,
                 buffer_len as libc::c_int, 0, 2, 1, &mut self.data.current_logical_bitstream)
         } {
             0 => {
