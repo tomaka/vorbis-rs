@@ -329,7 +329,7 @@ impl Encoder {
 			};
 			try!(check_errors(vorbis_sys::vorbis_encode_init_vbr(
 				&mut encoder.info as *mut vorbis_sys::vorbis_info,
-				channels as libc::c_long, rate as libc::c_long, quality)));
+				channels as libc::c_long, rate as libc::c_long, quality as libc::c_float)));
 
 			vorbis_sys::vorbis_comment_init(&mut encoder.comment as *mut vorbis_sys::vorbis_comment);
 			vorbis_sys::vorbis_analysis_init(
