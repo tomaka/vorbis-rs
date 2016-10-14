@@ -4,7 +4,7 @@ extern crate vorbisfile_sys;
 extern crate libc;
 extern crate rand;
 
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Read, Seek};
 use rand::Rng;
 
 /// Allows you to decode a sound file stream into packets.
@@ -293,7 +293,7 @@ pub enum VorbisQuality {
     VeryHighPerformance,
 }
 
-struct Encoder {
+pub struct Encoder {
 	data: Vec<u8>,
 	state: vorbis_sys::vorbis_dsp_state,
 	block: vorbis_sys::vorbis_block,
@@ -319,17 +319,17 @@ impl Encoder {
 		unsafe {
 			vorbis_sys::vorbis_info_init(&mut encoder.info as *mut vorbis_sys::vorbis_info);
 			let quality = match quality {
-			    VeryHighQuality => 1.0,
-			    HighQuality => 0.9,
-			    Quality => 0.7,
-			    Midium => 0.5,
-			    Performance => 0.3,
-				HighPerforamnce => 0.1,
-			    VeryHighPerformance => -0.1,
+			    VorbisQuality::VeryHighQuality => 1.0,
+			    VorbisQuality::HighQuality => 0.9,
+			    VorbisQuality::Quality => 0.7,
+			    VorbisQuality::Midium => 0.5,
+			    VorbisQuality::Performance => 0.3,
+				VorbisQuality::HighPerforamnce => 0.1,
+			    VorbisQuality::VeryHighPerformance => -0.1,
 			};
 			try!(check_errors(vorbis_sys::vorbis_encode_init_vbr(
 				&mut encoder.info as *mut vorbis_sys::vorbis_info,
-				channels, rate, quality)));
+				channels as libc::c_long, rate as libc::c_long, quality)));
 
 			vorbis_sys::vorbis_comment_init(&mut encoder.comment as *mut vorbis_sys::vorbis_comment);
 			vorbis_sys::vorbis_analysis_init(
@@ -375,68 +375,96 @@ impl Encoder {
 				}
 			}
 		}
-		Ok(encoder);
+		return Ok(encoder);
 	}
 
 	// data is an interleaved array of samples, they must be in (-1.0  1.0)
 	pub fn encode(&mut self, data: &[f32]) -> Result<Vec<u8>, VorbisError> {
 		let samples = data.len() as i32 / self.info.channels;
-		let mut buffer: *mut *mut libc::c_float = vorbis_sys::vorbis_analysis_buffer(
-			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, samples);
+		let buffer: *mut *mut libc::c_float = unsafe { vorbis_sys::vorbis_analysis_buffer(
+			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, samples) };
 		let mut data_index = 0;
 		for b in 0..samples {
 			for c in 0..self.info.channels {
-				*((*(buffer.offset(c as isize))).offset(b as isize)) =
-					data[data_index] as libc::c_float;
+				unsafe {
+					*((*(buffer.offset(c as isize))).offset(b as isize)) =
+						data[data_index] as libc::c_float;
+				}
 				data_index += 1;
 			}
 		}
-		vorbis_sys::vorbis_analysis_wrote(
+		try!(check_errors( unsafe { vorbis_sys::vorbis_analysis_wrote(
 			&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
-			samples);
-		self.read_block();
+			samples) }));
+		try!(self.read_block());
 		let result = Ok(self.data.clone());
 		self.data = Vec::new();
 		return result;
 	}
 
-	fn read_block(&mut self) {
-		while vorbis_sys::vorbis_analysis_blockout(
-				&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
-				&mut self.block as *mut vorbis_sys::vorbis_block) == 1 {
-			vorbis_sys::vorbis_analysis(&mut self.block as *mut vorbis_sys::vorbis_block,
-				0 as *mut ogg_sys::ogg_packet);
-			vorbis_sys::vorbis_bitrate_addblock(&mut self.block as *mut vorbis_sys::vorbis_block);
-			while vorbis_sys::vorbis_bitrate_flushpacket(
+	fn read_block(&mut self) -> Result<(), VorbisError> {
+		loop { // TODO: mmm! it could be better but it does not have high priority
+			let block_out = unsafe { vorbis_sys::vorbis_analysis_blockout(
 					&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
-					&mut self.packet as *mut ogg_sys::ogg_packet) != 0 {
-				ogg_sys::ogg_stream_packetin(
+					&mut self.block as *mut vorbis_sys::vorbis_block) };
+			match block_out {
+				1 => {},
+				0 => {
+					break;
+				},
+				_  => {
+					try!(check_errors(block_out));
+				},
+			}
+			try!(check_errors(unsafe { vorbis_sys::vorbis_analysis(
+				&mut self.block as *mut vorbis_sys::vorbis_block,
+				0 as *mut ogg_sys::ogg_packet)}));
+			try!(check_errors(unsafe { vorbis_sys::vorbis_bitrate_addblock(
+				&mut self.block as *mut vorbis_sys::vorbis_block)}));
+			loop {
+				let flush_packet = unsafe { vorbis_sys::vorbis_bitrate_flushpacket(
+					&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
+					&mut self.packet as *mut ogg_sys::ogg_packet)};
+				match flush_packet {
+					1 => {},
+					0 => {
+						break;
+					},
+					_  => {
+						try!(check_errors(block_out));
+					},
+				}
+				unsafe { ogg_sys::ogg_stream_packetin(
 					&mut self.stream as *mut ogg_sys::ogg_stream_state,
-					&mut self.packet as *mut ogg_sys::ogg_packet);
+					&mut self.packet as *mut ogg_sys::ogg_packet);}
 				loop {
-					let result = ogg_sys::ogg_stream_pageout(
+					let result = unsafe { ogg_sys::ogg_stream_pageout(
 						&mut self.stream as *mut ogg_sys::ogg_stream_state,
-						&mut self.page as *mut ogg_sys::ogg_page);
+						&mut self.page as *mut ogg_sys::ogg_page) };
 					if result == 0 {
 						break;
 					}
-					self.data.extend_from_slice(std::slice::from_raw_parts(
-						self.page.header as *const u8, self.page.header_len as usize));
-					self.data.extend_from_slice(std::slice::from_raw_parts(
-						self.page.body as *const u8, self.page.body_len as usize));
-					if ogg_sys::ogg_page_eos(&mut self.page as *mut ogg_sys::ogg_page) != 0 {
-						panic!("Unexpected behavior. Please call the Package author.");
+					self.data.extend_from_slice(unsafe { std::slice::from_raw_parts(
+						self.page.header as *const u8, self.page.header_len as usize) });
+					self.data.extend_from_slice(unsafe { std::slice::from_raw_parts(
+						self.page.body as *const u8, self.page.body_len as usize) });
+					if unsafe { ogg_sys::ogg_page_eos(&mut self.page as *mut ogg_sys::ogg_page) } != 0 {
+						panic!("Unexpected behavior. Please call the package author.");
 					}
 				}
 			}
 		}
+		Ok(())
 	}
 
-	pub fn flush(&mut self) -> Vec<u8> {
-		unsafe { vorbis_sys::vorbis_analysis_wrote(
-			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, 0);
-		}
-		self.read_block();
+	pub fn flush(&mut self) -> Result<Vec<u8>, VorbisError> {
+		try!(check_errors(unsafe { vorbis_sys::vorbis_analysis_wrote(
+			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, 0)
+		}));
+		try!(self.read_block());
+		let result = Ok(self.data.clone());
+		self.data = Vec::new();
+		return result;
 	}
 }
 
