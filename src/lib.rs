@@ -334,9 +334,14 @@ impl Encoder {
 			try!(check_errors(vorbisenc_sys::vorbis_encode_init_vbr(
 				&mut encoder.info as *mut vorbis_sys::vorbis_info,
 				channels as libc::c_long, rate as libc::c_long, quality as libc::c_float)));
-
 			vorbis_sys::vorbis_comment_init(
 				&mut encoder.comment as *mut vorbis_sys::vorbis_comment);
+			let encoder_tag = std::ffi::CString::new("ENCODER").unwrap();
+			let encoder_name = std::ffi::CString::new("vorbis-rs-encoder").unwrap();
+			vorbis_sys::vorbis_comment_add_tag(
+				&mut encoder.comment as *mut vorbis_sys::vorbis_comment,
+				encoder_tag.as_ptr(),
+				encoder_name.as_ptr());
 			try!(check_errors(vorbis_sys::vorbis_analysis_init(
 				&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state ,
 				&mut encoder.info as *mut vorbis_sys::vorbis_info)));
