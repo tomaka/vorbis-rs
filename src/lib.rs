@@ -1,6 +1,7 @@
 extern crate ogg_sys;
 extern crate vorbis_sys;
 extern crate vorbisfile_sys;
+extern crate vorbisenc_sys;
 extern crate libc;
 extern crate rand;
 
@@ -327,7 +328,7 @@ impl Encoder {
 				VorbisQuality::HighPerforamnce => 0.1,
 			    VorbisQuality::VeryHighPerformance => -0.1,
 			};
-			try!(check_errors(vorbis_sys::vorbis_encode_init_vbr(
+			try!(check_errors(vorbisenc_sys::vorbis_encode_init_vbr(
 				&mut encoder.info as *mut vorbis_sys::vorbis_info,
 				channels as libc::c_long, rate as libc::c_long, quality as libc::c_float)));
 

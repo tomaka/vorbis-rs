@@ -10,5 +10,6 @@ license = "Apache-2.0"
 libc = "*"
 ogg-sys = "*"
 rand = "*"
-vorbis-sys = { git = "https://github.com/Hossein-Noroozpour/vorbis-sys.git" }
-vorbisfile-sys = { git = "https://github.com/Hossein-Noroozpour/vorbisfile-sys.git" }
+vorbis-sys = "*"
+vorbisenc-sys = "*"
+vorbisfile-sys = "*"
