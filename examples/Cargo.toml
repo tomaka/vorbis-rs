@@ -1,0 +1,7 @@
+[package]
+name = "vorbis-rs-example"
+version = "0.1.0"
+authors = ["Hossein Noroozpour (Thany Hulixer) <hossein.noroozpour@gmail.com>"]
+
+[dependencies]
+vorbis = { path = ".."}

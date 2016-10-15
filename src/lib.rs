@@ -1,12 +1,11 @@
 extern crate ogg_sys;
 extern crate vorbis_sys;
 extern crate vorbisfile_sys;
-extern crate vorbisenc_sys;
+extern crate vorbis_encoder;
 extern crate libc;
 extern crate rand;
 
 use std::io::{self, Read, Seek};
-use rand::Rng;
 
 /// Allows you to decode a sound file stream into packets.
 pub struct Decoder<R> where R: Read + Seek {
@@ -296,199 +295,59 @@ pub enum VorbisQuality {
 }
 
 pub struct Encoder {
-	encoder_used: bool,
-	data: Vec<u8>,
-	state: vorbis_sys::vorbis_dsp_state,
-	block: vorbis_sys::vorbis_block,
-	info: vorbis_sys::vorbis_info,
-	comment: vorbis_sys::vorbis_comment,
-	stream: ogg_sys::ogg_stream_state,
-	page: ogg_sys::ogg_page,
-	packet: ogg_sys::ogg_packet,
+	e: vorbis_encoder::Encoder,
 }
 
 impl Encoder {
 	pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
-		let mut encoder = Encoder {
-			encoder_used: false,
-			data: Vec::new(),
-			state: unsafe { std::mem::zeroed() },
-			block: unsafe { std::mem::zeroed() },
-			info: unsafe { std::mem::zeroed() },
-			comment: unsafe { std::mem::zeroed() },
-			stream: unsafe { std::mem::zeroed() },
-			page: unsafe { std::mem::zeroed() },
-			packet: unsafe { std::mem::zeroed() },
+		let quality = match quality {
+			VorbisQuality::VeryHighQuality => {1.0f32},
+		    VorbisQuality::HighQuality => {0.8f32},
+		    VorbisQuality::Quality => {0.6f32},
+		    VorbisQuality::Midium => {0.4f32},
+		    VorbisQuality::Performance => {0.3f32},
+			VorbisQuality::HighPerforamnce => {0.1f32},
+		    VorbisQuality::VeryHighPerformance => {-0.1f32},
 		};
-		unsafe {
-			vorbis_sys::vorbis_info_init(&mut encoder.info as *mut vorbis_sys::vorbis_info);
-			let quality = match quality {
-			    VorbisQuality::VeryHighQuality => 1.0,
-			    VorbisQuality::HighQuality => 0.9,
-			    VorbisQuality::Quality => 0.7,
-			    VorbisQuality::Midium => 0.5,
-			    VorbisQuality::Performance => 0.3,
-				VorbisQuality::HighPerforamnce => 0.1,
-			    VorbisQuality::VeryHighPerformance => -0.1,
-			};
-			try!(check_errors(vorbisenc_sys::vorbis_encode_init_vbr(
-				&mut encoder.info as *mut vorbis_sys::vorbis_info,
-				channels as libc::c_long, rate as libc::c_long, quality as libc::c_float)));
-			vorbis_sys::vorbis_comment_init(
-				&mut encoder.comment as *mut vorbis_sys::vorbis_comment);
-			let encoder_tag = std::ffi::CString::new("ENCODER").unwrap();
-			let encoder_name = std::ffi::CString::new("vorbis-rs-encoder").unwrap();
-			vorbis_sys::vorbis_comment_add_tag(
-				&mut encoder.comment as *mut vorbis_sys::vorbis_comment,
-				encoder_tag.as_ptr(),
-				encoder_name.as_ptr());
-			try!(check_errors(vorbis_sys::vorbis_analysis_init(
-				&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state ,
-				&mut encoder.info as *mut vorbis_sys::vorbis_info)));
-			try!(check_errors(vorbis_sys::vorbis_block_init(
-				&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state,
-				&mut encoder.block as *mut vorbis_sys::vorbis_block)));
-			let mut rnd = rand::os::OsRng::new().unwrap();
-			ogg_sys::ogg_stream_init(
-				&mut encoder.stream as *mut ogg_sys::ogg_stream_state, rnd.gen());
-			{
-				let mut header: ogg_sys::ogg_packet = std::mem::zeroed();
-				let mut header_comm: ogg_sys::ogg_packet = std::mem::zeroed();
-				let mut header_code: ogg_sys::ogg_packet = std::mem::zeroed();
-
-				try!(check_errors(vorbis_sys::vorbis_analysis_headerout(
-					&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state,
-					&mut encoder.comment as *mut vorbis_sys::vorbis_comment,
-					&mut header as *mut ogg_sys::ogg_packet,
-					&mut header_comm as *mut ogg_sys::ogg_packet,
-					&mut header_code as *mut ogg_sys::ogg_packet)));
-				ogg_sys::ogg_stream_packetin(
-					&mut encoder.stream as *mut ogg_sys::ogg_stream_state,
-					&mut header as *mut ogg_sys::ogg_packet);
-				ogg_sys::ogg_stream_packetin(
-					&mut encoder.stream as *mut ogg_sys::ogg_stream_state,
-					&mut header_comm as *mut ogg_sys::ogg_packet);
-				ogg_sys::ogg_stream_packetin(
-					&mut encoder.stream as *mut ogg_sys::ogg_stream_state,
-					&mut header_code as *mut ogg_sys::ogg_packet);
-				loop {
-					let result = ogg_sys::ogg_stream_flush(
-						&mut encoder.stream as *mut ogg_sys::ogg_stream_state,
-						&mut encoder.page as *mut ogg_sys::ogg_page);
-					if result == 0 {
-						break;
+		Ok(Encoder {
+			e: match vorbis_encoder::Encoder::new(channels as u32, rate, quality) {
+				Ok(e) => {e},
+				Err(i) => {
+					match check_errors(i) {
+						Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
+						Err(err) => return Err(err),
 					}
-					encoder.data.extend_from_slice(std::slice::from_raw_parts(
-						encoder.page.header as *const u8, encoder.page.header_len as usize));
-					encoder.data.extend_from_slice(std::slice::from_raw_parts(
-						encoder.page.body as *const u8, encoder.page.body_len as usize));
 				}
 			}
-		}
-		Ok(encoder)
+		})
 	}
 
-	// data is an interleaved array of samples, they must be in (-1.0  1.0)
-	pub fn encode(&mut self, data: &[f32]) -> Result<Vec<u8>, VorbisError> {
-		self.encoder_used = true;
-		let samples = data.len() as i32 / self.info.channels;
-		let buffer: *mut *mut libc::c_float = unsafe { vorbis_sys::vorbis_analysis_buffer(
-			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, samples) };
-		let mut data_index = 0;
-		for b in 0..samples {
-			for c in 0..self.info.channels {
-				unsafe {
-					*((*(buffer.offset(c as isize))).offset(b as isize)) =
-						data[data_index] as libc::c_float;
-				}
-				data_index += 1;
-			}
-		}
-		try!(check_errors( unsafe { vorbis_sys::vorbis_analysis_wrote(
-			&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
-			samples) }));
-		try!(self.read_block());
-		let result = Ok(self.data.clone());
-		self.data = Vec::new();
-		return result;
-	}
-
-	fn read_block(&mut self) -> Result<(), VorbisError> {
-		loop { // TODO: mmm! it could be better but it does not have high priority
-			let block_out = unsafe { vorbis_sys::vorbis_analysis_blockout(
-					&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
-					&mut self.block as *mut vorbis_sys::vorbis_block) };
-			match block_out {
-				1 => {},
-				0 => {
-					break;
-				},
-				_  => {
-					try!(check_errors(block_out));
-				},
-			}
-			try!(check_errors(unsafe { vorbis_sys::vorbis_analysis(
-				&mut self.block as *mut vorbis_sys::vorbis_block,
-				0 as *mut ogg_sys::ogg_packet)}));
-			try!(check_errors(unsafe { vorbis_sys::vorbis_bitrate_addblock(
-				&mut self.block as *mut vorbis_sys::vorbis_block)}));
-			loop {
-				let flush_packet = unsafe { vorbis_sys::vorbis_bitrate_flushpacket(
-					&mut self.state as *mut vorbis_sys::vorbis_dsp_state,
-					&mut self.packet as *mut ogg_sys::ogg_packet)};
-				match flush_packet {
-					1 => {},
-					0 => {
-						break;
-					},
-					_  => {
-						try!(check_errors(block_out));
-					},
-				}
-				unsafe { ogg_sys::ogg_stream_packetin(
-					&mut self.stream as *mut ogg_sys::ogg_stream_state,
-					&mut self.packet as *mut ogg_sys::ogg_packet);}
-				loop {
-					let result = unsafe { ogg_sys::ogg_stream_pageout(
-						&mut self.stream as *mut ogg_sys::ogg_stream_state,
-						&mut self.page as *mut ogg_sys::ogg_page) };
-					if result == 0 {
-						break;
-					}
-					self.data.extend_from_slice(unsafe { std::slice::from_raw_parts(
-						self.page.header as *const u8, self.page.header_len as usize) });
-					self.data.extend_from_slice(unsafe { std::slice::from_raw_parts(
-						self.page.body as *const u8, self.page.body_len as usize) });
-					if unsafe { ogg_sys::ogg_page_eos(&mut self.page as *mut ogg_sys::ogg_page) } != 0 {
-						panic!("Unexpected behavior. Please call the package author.");
+	// data is an interleaved array of samples
+	pub fn encode(&mut self, data: &Vec<i16>) -> Result<Vec<u8>, VorbisError> {
+		Ok(
+			match self.e.encode(&data) {
+				Ok(d) => {d},
+				Err(i) => {
+					match check_errors(i) {
+						Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
+						Err(err) => return Err(err),
 					}
 				}
 			}
-		}
-		Ok(())
+		)
 	}
 
 	pub fn flush(&mut self) -> Result<Vec<u8>, VorbisError> {
-		try!(check_errors(unsafe { vorbis_sys::vorbis_analysis_wrote(
-			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, 0)
-		}));
-		try!(self.read_block());
-		let result = Ok(self.data.clone());
-		self.data = Vec::new();
-		return result;
-	}
-}
-
-impl Drop for Encoder {
-    fn drop(&mut self) {
-        unsafe {
-			ogg_sys::ogg_stream_clear(&mut self.stream as *mut ogg_sys::ogg_stream_state);
-			if self.encoder_used {
-				vorbis_sys::vorbis_block_clear(&mut self.block as *mut vorbis_sys::vorbis_block);
-				vorbis_sys::vorbis_dsp_clear(&mut self.state as *mut vorbis_sys::vorbis_dsp_state);
+		Ok(
+			match self.e.flush() {
+				Ok(d) => {d},
+				Err(i) => {
+					match check_errors(i) {
+						Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
+						Err(err) => return Err(err),
+					}
+				}
 			}
-			vorbis_sys::vorbis_comment_clear(&mut self.comment as *mut vorbis_sys::vorbis_comment);
-			vorbis_sys::vorbis_info_clear(&mut self.info as *mut vorbis_sys::vorbis_info);
-        }
-    }
+		)
+	}
 }
