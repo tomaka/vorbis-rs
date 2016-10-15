@@ -476,8 +476,8 @@ impl Drop for Encoder {
     fn drop(&mut self) {
         unsafe {
 			ogg_sys::ogg_stream_clear(&mut self.stream as *mut ogg_sys::ogg_stream_state);
-			vorbis_sys::vorbis_block_clear(&mut self.block as *mut vorbis_sys::vorbis_block);
 			if self.encoder_used {
+				vorbis_sys::vorbis_block_clear(&mut self.block as *mut vorbis_sys::vorbis_block);
 				vorbis_sys::vorbis_dsp_clear(&mut self.state as *mut vorbis_sys::vorbis_dsp_state);
 			}
 			vorbis_sys::vorbis_comment_clear(&mut self.comment as *mut vorbis_sys::vorbis_comment);
