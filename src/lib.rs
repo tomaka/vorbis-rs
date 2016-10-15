@@ -295,6 +295,7 @@ pub enum VorbisQuality {
 }
 
 pub struct Encoder {
+	encoder_used: bool,
 	data: Vec<u8>,
 	state: vorbis_sys::vorbis_dsp_state,
 	block: vorbis_sys::vorbis_block,
@@ -308,6 +309,7 @@ pub struct Encoder {
 impl Encoder {
 	pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
 		let mut encoder = Encoder {
+			encoder_used: false,
 			data: Vec::new(),
 			state: unsafe { std::mem::zeroed() },
 			block: unsafe { std::mem::zeroed() },
@@ -381,6 +383,7 @@ impl Encoder {
 
 	// data is an interleaved array of samples, they must be in (-1.0  1.0)
 	pub fn encode(&mut self, data: &[f32]) -> Result<Vec<u8>, VorbisError> {
+		self.encoder_used = true;
 		let samples = data.len() as i32 / self.info.channels;
 		let buffer: *mut *mut libc::c_float = unsafe { vorbis_sys::vorbis_analysis_buffer(
 			&mut self.state as *mut vorbis_sys::vorbis_dsp_state, samples) };
@@ -474,7 +477,7 @@ impl Drop for Encoder {
         unsafe {
 			ogg_sys::ogg_stream_clear(&mut self.stream as *mut ogg_sys::ogg_stream_state);
 			vorbis_sys::vorbis_block_clear(&mut self.block as *mut vorbis_sys::vorbis_block);
-			if self.state.pcmret != 0 as *mut *mut libc::c_float {
+			if self.encoder_used {
 				vorbis_sys::vorbis_dsp_clear(&mut self.state as *mut vorbis_sys::vorbis_dsp_state);
 			}
 			vorbis_sys::vorbis_comment_clear(&mut self.comment as *mut vorbis_sys::vorbis_comment);
