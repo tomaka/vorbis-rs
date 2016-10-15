@@ -200,7 +200,8 @@ impl<R> Decoder<R> where R: Read + Seek {
         let buffer_len = buffer.len() * 2;
 
         match unsafe {
-            vorbisfile_sys::ov_read(&mut self.data.vorbis, buffer.as_mut_ptr() as *mut libc::c_char,
+            vorbisfile_sys::ov_read(&mut self.data.vorbis,
+				buffer.as_mut_ptr() as *mut libc::c_char,
                 buffer_len as libc::c_int, 0, 2, 1, &mut self.data.current_logical_bitstream)
         } {
             0 => {
@@ -334,27 +335,28 @@ impl Encoder {
 				&mut encoder.info as *mut vorbis_sys::vorbis_info,
 				channels as libc::c_long, rate as libc::c_long, quality as libc::c_float)));
 
-			vorbis_sys::vorbis_comment_init(&mut encoder.comment as *mut vorbis_sys::vorbis_comment);
-			vorbis_sys::vorbis_analysis_init(
+			vorbis_sys::vorbis_comment_init(
+				&mut encoder.comment as *mut vorbis_sys::vorbis_comment);
+			try!(check_errors(vorbis_sys::vorbis_analysis_init(
 				&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state ,
-				&mut encoder.info as *mut vorbis_sys::vorbis_info);
-			vorbis_sys::vorbis_block_init(
+				&mut encoder.info as *mut vorbis_sys::vorbis_info)));
+			try!(check_errors(vorbis_sys::vorbis_block_init(
 				&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state,
-				&mut encoder.block as *mut vorbis_sys::vorbis_block);
+				&mut encoder.block as *mut vorbis_sys::vorbis_block)));
 			let mut rnd = rand::os::OsRng::new().unwrap();
-			ogg_sys::ogg_stream_init(&mut encoder.stream as *mut ogg_sys::ogg_stream_state, rnd.gen());
-
+			ogg_sys::ogg_stream_init(
+				&mut encoder.stream as *mut ogg_sys::ogg_stream_state, rnd.gen());
 			{
 				let mut header: ogg_sys::ogg_packet = std::mem::zeroed();
 				let mut header_comm: ogg_sys::ogg_packet = std::mem::zeroed();
 				let mut header_code: ogg_sys::ogg_packet = std::mem::zeroed();
 
-				vorbis_sys::vorbis_analysis_headerout(
+				try!(check_errors(vorbis_sys::vorbis_analysis_headerout(
 					&mut encoder.state as *mut vorbis_sys::vorbis_dsp_state,
 					&mut encoder.comment as *mut vorbis_sys::vorbis_comment,
 					&mut header as *mut ogg_sys::ogg_packet,
 					&mut header_comm as *mut ogg_sys::ogg_packet,
-					&mut header_code as *mut ogg_sys::ogg_packet);
+					&mut header_code as *mut ogg_sys::ogg_packet)));
 				ogg_sys::ogg_stream_packetin(
 					&mut encoder.stream as *mut ogg_sys::ogg_stream_state,
 					&mut header as *mut ogg_sys::ogg_packet);
@@ -378,7 +380,7 @@ impl Encoder {
 				}
 			}
 		}
-		return Ok(encoder);
+		Ok(encoder)
 	}
 
 	// data is an interleaved array of samples, they must be in (-1.0  1.0)
