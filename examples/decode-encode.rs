@@ -11,10 +11,12 @@ fn main() {
     //      third for
     let error = "Error: Usage is <in-ogg-vorbis-file> <out-pcm-file> <out-vorbis-file>";
     let in_file = args.next().expect(error);
-    let pcm_file = args.next().expect(error);
-    let out_file = args.next().expect(error);
     let in_file = std::fs::File::open(in_file).unwrap();
-    let mut decoder = vorbis::Decoder::new(f).unwrap();
+    let pcm_file = args.next().expect(error);
+    let mut pcm_file = std::fs::File::create(pcm_file).unwrap();
+    let out_file = args.next().expect(error);
+    let mut out_file = std::fs::File::create(out_file).unwrap();
+    let mut decoder = vorbis::Decoder::new(in_file).unwrap();
     let packets = decoder.packets();
     let mut data = Vec::new();
     let mut channels = 0;
@@ -23,7 +25,6 @@ fn main() {
     let mut bitrate_nominal = 0;
     let mut bitrate_lower = 0;
     let mut bitrate_window = 0;
-    let mut pcm_file = std::fs::File::create(pcm_file).unwrap();
     for p in packets {
         match p {
             Ok(packet) => {
