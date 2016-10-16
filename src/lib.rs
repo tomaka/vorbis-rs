@@ -27,7 +27,7 @@ pub enum VorbisError {
     VersionMismatch,
     BadHeader,
     Hole,
-	InvalidSetup, //         OV_EINVAL - Invalid setup request, eg, out of range argument.
+    InvalidSetup, //         OV_EINVAL - Invalid setup request, eg, out of range argument.
     Unimplemented, //        OV_EIMPL - Unimplemented mode; unable to comply with quality level request.
 }
 
@@ -40,7 +40,7 @@ impl std::error::Error for VorbisError {
             &VorbisError::BadHeader => "Invalid Vorbis bitstream header",
             &VorbisError::InvalidSetup => "Invalid setup request, eg, out of range argument or initial file headers are corrupt",
             &VorbisError::Hole => "Interruption of data",
-		    &VorbisError::Unimplemented => "Unimplemented mode; unable to comply with quality level request.",
+            &VorbisError::Unimplemented => "Unimplemented mode; unable to comply with quality level request.",
         }
     }
 
@@ -200,7 +200,7 @@ impl<R> Decoder<R> where R: Read + Seek {
 
         match unsafe {
             vorbisfile_sys::ov_read(&mut self.data.vorbis,
-				buffer.as_mut_ptr() as *mut libc::c_char,
+                buffer.as_mut_ptr() as *mut libc::c_char,
                 buffer_len as libc::c_int, 0, 2, 1, &mut self.data.current_logical_bitstream)
         } {
             0 => {
@@ -275,7 +275,7 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
 
         vorbis_sys::OV_EREAD => unimplemented!(),
 
-		vorbis_sys::OV_EIMPL => Err(VorbisError::Unimplemented),
+        vorbis_sys::OV_EIMPL => Err(VorbisError::Unimplemented),
 
         // indicates a bug or heap/stack corruption
         vorbis_sys::OV_EFAULT => panic!("Internal libvorbis error"),
@@ -290,64 +290,64 @@ pub enum VorbisQuality {
     Quality,
     Midium,
     Performance,
-	HighPerforamnce,
+    HighPerforamnce,
     VeryHighPerformance,
 }
 
 pub struct Encoder {
-	e: vorbis_encoder::Encoder,
+    e: vorbis_encoder::Encoder,
 }
 
 impl Encoder {
-	pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
-		let quality = match quality {
-			VorbisQuality::VeryHighQuality => {1.0f32},
-		    VorbisQuality::HighQuality => {0.8f32},
-		    VorbisQuality::Quality => {0.6f32},
-		    VorbisQuality::Midium => {0.4f32},
-		    VorbisQuality::Performance => {0.3f32},
-			VorbisQuality::HighPerforamnce => {0.1f32},
-		    VorbisQuality::VeryHighPerformance => {-0.1f32},
-		};
-		Ok(Encoder {
-			e: match vorbis_encoder::Encoder::new(channels as u32, rate, quality) {
-				Ok(e) => {e},
-				Err(i) => {
-					match check_errors(i) {
-						Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
-						Err(err) => return Err(err),
-					}
-				}
-			}
-		})
-	}
+    pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
+        let quality = match quality {
+            VorbisQuality::VeryHighQuality => {1.0f32},
+            VorbisQuality::HighQuality => {0.8f32},
+            VorbisQuality::Quality => {0.6f32},
+            VorbisQuality::Midium => {0.4f32},
+            VorbisQuality::Performance => {0.3f32},
+            VorbisQuality::HighPerforamnce => {0.1f32},
+            VorbisQuality::VeryHighPerformance => {-0.1f32},
+        };
+        Ok(Encoder {
+            e: match vorbis_encoder::Encoder::new(channels as u32, rate, quality) {
+                Ok(e) => {e},
+                Err(i) => {
+                    match check_errors(i) {
+                        Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
+        })
+    }
 
-	// data is an interleaved array of samples
-	pub fn encode(&mut self, data: &Vec<i16>) -> Result<Vec<u8>, VorbisError> {
-		Ok(
-			match self.e.encode(&data) {
-				Ok(d) => {d},
-				Err(i) => {
-					match check_errors(i) {
-						Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
-						Err(err) => return Err(err),
-					}
-				}
-			}
-		)
-	}
+    // data is an interleaved array of samples
+    pub fn encode(&mut self, data: &Vec<i16>) -> Result<Vec<u8>, VorbisError> {
+        Ok(
+            match self.e.encode(&data) {
+                Ok(d) => {d},
+                Err(i) => {
+                    match check_errors(i) {
+                        Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
+        )
+    }
 
-	pub fn flush(&mut self) -> Result<Vec<u8>, VorbisError> {
-		Ok(
-			match self.e.flush() {
-				Ok(d) => {d},
-				Err(i) => {
-					match check_errors(i) {
-						Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
-						Err(err) => return Err(err),
-					}
-				}
-			}
-		)
-	}
+    pub fn flush(&mut self) -> Result<Vec<u8>, VorbisError> {
+        Ok(
+            match self.e.flush() {
+                Ok(d) => {d},
+                Err(i) => {
+                    match check_errors(i) {
+                        Ok(()) => panic!("Unexpected behavior, call hossein.noroozpour@gmail.com"),
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
+        )
+    }
 }
