@@ -1,6 +1,6 @@
 [package]
 name = "vorbis"
-version = "0.0.14"
+version = "0.0.15"
 authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "High-level bindings for the official libvorbis library."
 repository = "https://github.com/tomaka/vorbis-rs"
@@ -9,5 +9,7 @@ license = "Apache-2.0"
 [dependencies]
 libc = "*"
 ogg-sys = "*"
+rand = "*"
 vorbis-sys = "*"
+vorbis-encoder = "0.1"
 vorbisfile-sys = "*"
