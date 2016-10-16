@@ -3,7 +3,7 @@ extern crate vorbis;
 use std::io::Write;
 
 fn main() {
-    let args = std::env::args();
+    let mut args = std::env::args();
     args.next();
     // It needs 3 file address as arguments:
     //      first for input vorbis,
