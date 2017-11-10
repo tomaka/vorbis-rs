@@ -290,7 +290,7 @@ pub enum VorbisQuality {
     Quality,
     Midium,
     Performance,
-    HighPerforamnce,
+    HighPerformance,
     VeryHighPerformance,
 }
 
@@ -306,7 +306,7 @@ impl Encoder {
             VorbisQuality::Quality => {0.6f32},
             VorbisQuality::Midium => {0.4f32},
             VorbisQuality::Performance => {0.3f32},
-            VorbisQuality::HighPerforamnce => {0.1f32},
+            VorbisQuality::HighPerformance => {0.1f32},
             VorbisQuality::VeryHighPerformance => {-0.1f32},
         };
         Ok(Encoder {
