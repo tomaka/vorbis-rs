@@ -186,6 +186,21 @@ impl<R> Decoder<R> where R: Read + Seek {
         }
     }
 
+    /// Returns the total length, in seconds, of this Vorbis bitstream.
+    pub fn time_total(&mut self) -> Result<f64, VorbisError> {
+        // Calls to this function can fail if:
+        //
+        // - The passed struct is invalid. (Ours are always valid.)
+        // - The bitstream is not seekable. (Ours are always seekable.)
+        // - We request the length of a nonexistent logical bitstream. (We
+        //   always request the length of the physical bitstream.)
+        //
+        // Therefore, this call will never fail.
+        unsafe {
+            Ok(vorbisfile_sys::ov_time_total(&mut self.data.vorbis, -1))
+        }
+    }
+
     pub fn packets(&mut self) -> PacketsIter<R> {
         PacketsIter(self)
     }
