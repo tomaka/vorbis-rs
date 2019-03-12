@@ -19,6 +19,14 @@ pub struct PacketsIter<'a, R: 'a + Read + Seek>(&'a mut Decoder<R>);
 ///
 pub struct PacketsIntoIter<R: Read + Seek>(Decoder<R>);
 
+///
+pub struct CommentsIter<'a> {
+    next_comment: usize,
+    comment_count: usize,
+    comment_bytes: &'a [*const u8],
+    comment_lengths: &'a [libc::c_int],
+}
+
 /// Errors that can happen while decoding & encoding
 #[derive(Debug)]
 pub enum VorbisError {
@@ -237,6 +245,36 @@ impl<R> Decoder<R> where R: Read + Seek {
             }
         }
     }
+
+    /// Returns an iterator over the comments for the current logical
+    /// bitstream.
+    ///
+    /// Comments are supposedly UTF-8 encoded, but because you may encounter
+    /// comments with malformed UTF-8 in the wild, each comment is delivered as
+    /// a `&[u8]`.
+    pub fn comments(&mut self) -> CommentsIter {
+        self.comments_for_bitstream(-1)
+            .expect("should not happen: no comments struct for current \
+                     logical bitstream?")
+    }
+
+    /// Returns an iterator over the comments for the requested logical
+    /// bitstream. Returns None if there is no bitstream with that ID, or
+    /// possibly if the stream is not seekable.
+    ///
+    /// Comments are supposedly UTF-8 encoded, but because you may encounter
+    /// comments with malformed UTF-8 in the wild, each comment is delivered as
+    /// a `&[u8]`.
+    pub fn comments_for_bitstream(&mut self, bitstream: i32) -> Option<CommentsIter> {
+        let comments = unsafe {
+            vorbisfile_sys::ov_comment(&mut self.data.vorbis, bitstream)
+                .as_mut()
+        };
+        match comments {
+            None => None,
+            Some(comments) => Some(CommentsIter::make(comments)),
+        }
+    }
 }
 
 impl<'a, R> Iterator for PacketsIter<'a, R> where R: 'a + Read + Seek {
@@ -252,6 +290,38 @@ impl<R> Iterator for PacketsIntoIter<R> where R: Read + Seek {
 
     fn next(&mut self) -> Option<Result<Packet, VorbisError>> {
         self.0.next_packet()
+    }
+}
+
+impl<'a> CommentsIter<'a> {
+    fn make(comments: &mut vorbis_sys::vorbis_comment) -> CommentsIter {
+        if comments.comments < 0 { panic!("should not happen: negative number of comments?") }
+        let comment_count = comments.comments as usize;
+        unsafe {
+            CommentsIter {
+                next_comment: 0,
+                comment_count,
+                comment_bytes: std::slice::from_raw_parts(std::mem::transmute(comments.user_comments), comment_count),
+                comment_lengths: std::slice::from_raw_parts(comments.comment_lengths, comment_count),
+            }
+        }
+    }
+}
+
+impl<'a> Iterator for CommentsIter<'a> {
+    type Item = &'a[u8];
+
+    fn next(&mut self) -> Option<&'a[u8]> {
+        if self.next_comment < self.comment_count {
+            let next_len = self.comment_lengths[self.next_comment];
+            if next_len < 0 { panic!("should not happen: negative comment length?") }
+            let next_ptr = self.comment_bytes[self.next_comment];
+            self.next_comment += 1;
+            Some(unsafe {
+                std::slice::from_raw_parts(next_ptr, next_len as usize)
+            })
+        }
+        else { None }
     }
 }
 
