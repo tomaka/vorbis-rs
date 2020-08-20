@@ -32,29 +32,25 @@ pub enum VorbisError {
 }
 
 impl std::error::Error for VorbisError {
-    fn description(&self) -> &str {
-        match self {
-            &VorbisError::ReadError(_) => "A read from media returned an error",
-            &VorbisError::NotVorbis => "Bitstream does not contain any Vorbis data",
-            &VorbisError::VersionMismatch => "Vorbis version mismatch",
-            &VorbisError::BadHeader => "Invalid Vorbis bitstream header",
-            &VorbisError::InvalidSetup => "Invalid setup request, eg, out of range argument or initial file headers are corrupt",
-            &VorbisError::Hole => "Interruption of data",
-            &VorbisError::Unimplemented => "Unimplemented mode; unable to comply with quality level request.",
-        }
-    }
-
-    fn cause(&self) -> Option<&std::error::Error> {
-        match self {
-            &VorbisError::ReadError(ref err) => Some(err as &std::error::Error),
-            _ => None
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match *self {
+            VorbisError::ReadError(ref err) => Some(err as &dyn std::error::Error),
+            _ => None,
         }
     }
 }
 
 impl std::fmt::Display for VorbisError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "{}", std::error::Error::description(self))
+        write!(fmt, "{}", match *self {
+            VorbisError::ReadError(_) => "A read from media returned an error",
+            VorbisError::NotVorbis => "Bitstream does not contain any Vorbis data",
+            VorbisError::VersionMismatch => "Vorbis version mismatch",
+            VorbisError::BadHeader => "Invalid Vorbis bitstream header",
+            VorbisError::InvalidSetup => "Invalid setup request, eg, out of range argument or initial file headers are corrupt",
+            VorbisError::Hole => "Interruption of data",
+            VorbisError::Unimplemented => "Unimplemented mode; unable to comply with quality level request.",
+        })
     }
 }
 
@@ -165,12 +161,12 @@ impl<R> Decoder<R> where R: Read + Seek {
         unsafe {
             let data_ptr = &mut *data as *mut DecoderData<R>;
             let data_ptr = data_ptr as *mut libc::c_void;
-            try!(check_errors(vorbisfile_sys::ov_open_callbacks(data_ptr, &mut data.vorbis,
-                std::ptr::null(), 0, callbacks)));
+            check_errors(vorbisfile_sys::ov_open_callbacks(data_ptr, &mut data.vorbis,
+                std::ptr::null(), 0, callbacks))?;
         }
 
         Ok(Decoder {
-            data: data,
+            data,
         })
     }
 

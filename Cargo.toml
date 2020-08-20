@@ -5,6 +5,7 @@ authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "High-level bindings for the official libvorbis library."
 repository = "https://github.com/tomaka/vorbis-rs"
 license = "Apache-2.0"
+edition = "2018"
 
 [dependencies]
 libc = "0.2"
