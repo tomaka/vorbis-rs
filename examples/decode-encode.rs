@@ -56,7 +56,7 @@ fn main() {
     println!("bitrate_nominal: {:?}", bitrate_nominal);
     println!("bitrate_lower: {:?}", bitrate_lower);
     println!("bitrate_window: {:?}", bitrate_window);
-    let mut encoder = vorbis::Encoder::new(channels as u8, rate, vorbis::VorbisQuality::Midium).expect("Error in creating encoder");
+    let mut encoder = vorbis::Encoder::new(channels as u8, rate, vorbis::VorbisQuality::Medium).expect("Error in creating encoder");
     out_file.write(encoder.encode(&data).expect("Error in encoding.").as_slice()).expect("Error in writing");
     out_file.write(encoder.flush().expect("Error in flushing.").as_slice()).expect("Error in writing");
 }

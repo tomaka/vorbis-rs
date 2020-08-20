@@ -285,9 +285,9 @@ pub enum VorbisQuality {
     VeryHighQuality,
     HighQuality,
     Quality,
-    Midium,
+    Medium,
     Performance,
-    HighPerforamnce,
+    HighPerformance,
     VeryHighPerformance,
 }
 
@@ -300,13 +300,13 @@ pub struct Encoder {
 impl Encoder {
     pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
         let quality = match quality {
-            VorbisQuality::VeryHighQuality => {1.0f32},
-            VorbisQuality::HighQuality => {0.8f32},
-            VorbisQuality::Quality => {0.6f32},
-            VorbisQuality::Midium => {0.4f32},
-            VorbisQuality::Performance => {0.3f32},
-            VorbisQuality::HighPerforamnce => {0.1f32},
-            VorbisQuality::VeryHighPerformance => {-0.1f32},
+            VorbisQuality::VeryHighQuality => 1.0f32,
+            VorbisQuality::HighQuality => 0.8f32,
+            VorbisQuality::Quality => 0.6f32,
+            VorbisQuality::Medium => 0.4f32,
+            VorbisQuality::Performance => 0.3f32,
+            VorbisQuality::HighPerformance => 0.1f32,
+            VorbisQuality::VeryHighPerformance => -0.1f32,
         };
         Ok(Encoder {
             e: match vorbis_encoder::Encoder::new(channels as u32, rate, quality) {
