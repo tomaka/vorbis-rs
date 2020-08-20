@@ -14,7 +14,8 @@ vorbis-sys = "0.1.0"
 vorbisfile-sys = "0.0.8"
 
 [dependencies.vorbis-encoder]
-version = "0.1"
+# Version with recent vorbis-sys is not on crates.io
+git = "https://github.com/Hossein-Noroozpour/vorbis-encoder-rs"
 optional = true
 
 [dev-dependencies]
