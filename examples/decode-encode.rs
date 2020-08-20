@@ -1,4 +1,5 @@
 extern crate vorbis;
+extern crate rand;
 
 use std::io::Write;
 

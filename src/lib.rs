@@ -1,9 +1,9 @@
 extern crate ogg_sys;
 extern crate vorbis_sys;
 extern crate vorbisfile_sys;
+#[cfg(feature = "encoder")]
 extern crate vorbis_encoder;
 extern crate libc;
-extern crate rand;
 
 use std::io::{self, Read, Seek};
 
@@ -283,6 +283,7 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
     }
 }
 
+#[cfg(feature = "encoder")]
 #[derive(Debug)]
 pub enum VorbisQuality {
     VeryHighQuality,
@@ -294,10 +295,12 @@ pub enum VorbisQuality {
     VeryHighPerformance,
 }
 
+#[cfg(feature = "encoder")]
 pub struct Encoder {
     e: vorbis_encoder::Encoder,
 }
 
+#[cfg(feature = "encoder")]
 impl Encoder {
     pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
         let quality = match quality {
