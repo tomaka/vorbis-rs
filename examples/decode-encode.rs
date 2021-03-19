@@ -38,13 +38,13 @@ fn main() {
                 let mut index = 0;
                 for sample in packet.data {
                     file_data[index] = (sample as u32 & 255) as u8;
-                    index+=1;
+                    index += 1;
                     file_data[index] = ((sample as u32 >> 8) & 255) as u8;
-                    index+=1;
+                    index += 1;
                     data.push(sample);
                 }
                 pcm_file.write(&file_data[..]).unwrap();
-            },
+            }
             _ => {}
         }
     }
@@ -55,7 +55,17 @@ fn main() {
     println!("bitrate_nominal: {:?}", bitrate_nominal);
     println!("bitrate_lower: {:?}", bitrate_lower);
     println!("bitrate_window: {:?}", bitrate_window);
-    let mut encoder = vorbis::Encoder::new(channels as u8, rate, vorbis::VorbisQuality::Midium).expect("Error in creating encoder");
-    out_file.write(encoder.encode(&data).expect("Error in encoding.").as_slice()).expect("Error in writing");
-    out_file.write(encoder.flush().expect("Error in flushing.").as_slice()).expect("Error in writing");
+    let mut encoder = vorbis::Encoder::new(channels as u8, rate, vorbis::VorbisQuality::Midium)
+        .expect("Error in creating encoder");
+    out_file
+        .write(
+            encoder
+                .encode(&data)
+                .expect("Error in encoding.")
+                .as_slice(),
+        )
+        .expect("Error in writing");
+    out_file
+        .write(encoder.flush().expect("Error in flushing.").as_slice())
+        .expect("Error in writing");
 }
