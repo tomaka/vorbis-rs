@@ -1,11 +1,14 @@
 extern crate libc;
 extern crate ogg_sys;
 extern crate rand;
-extern crate vorbis_encoder;
 extern crate vorbis_sys;
 extern crate vorbisfile_sys;
 
+#[cfg(feature = "with-encoder")]
+extern crate vorbis_encoder;
+
 use std::io::{self, Read, Seek};
+use std::mem::MaybeUninit;
 
 /// Allows you to decode a sound file stream into packets.
 pub struct Decoder<R>
@@ -35,21 +38,9 @@ pub enum VorbisError {
 }
 
 impl std::error::Error for VorbisError {
-    fn description(&self) -> &str {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            &VorbisError::ReadError(_) => "A read from media returned an error",
-            &VorbisError::NotVorbis => "Bitstream does not contain any Vorbis data",
-            &VorbisError::VersionMismatch => "Vorbis version mismatch",
-            &VorbisError::BadHeader => "Invalid Vorbis bitstream header",
-            &VorbisError::InvalidSetup => "Invalid setup request, eg, out of range argument or initial file headers are corrupt",
-            &VorbisError::Hole => "Interruption of data",
-            &VorbisError::Unimplemented => "Unimplemented mode; unable to comply with quality level request.",
-        }
-    }
-
-    fn cause(&self) -> Option<&std::error::Error> {
-        match self {
-            &VorbisError::ReadError(ref err) => Some(err as &std::error::Error),
+            VorbisError::ReadError(ref err) => Some(err),
             _ => None,
         }
     }
@@ -57,7 +48,17 @@ impl std::error::Error for VorbisError {
 
 impl std::fmt::Display for VorbisError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "{}", std::error::Error::description(self))
+        let description = match self {
+            VorbisError::ReadError(_) => "A read from media returned an error",
+            VorbisError::NotVorbis => "Bitstream does not contain any Vorbis data",
+            VorbisError::VersionMismatch => "Vorbis version mismatch",
+            VorbisError::BadHeader => "Invalid Vorbis bitstream header",
+            VorbisError::InvalidSetup => "Invalid setup request, eg, out of range argument or initial file headers are corrupt",
+            VorbisError::Hole => "Interruption of data",
+            VorbisError::Unimplemented => "Unimplemented mode; unable to comply with quality level request.",
+        };
+
+        fmt.write_str(description)
     }
 }
 
@@ -67,11 +68,23 @@ impl From<io::Error> for VorbisError {
     }
 }
 
+#[repr(C)]
 struct DecoderData<R>
 where
     R: Read + Seek,
 {
     vorbis: vorbisfile_sys::OggVorbis_File,
+    reader: R,
+    current_logical_bitstream: libc::c_int,
+    read_error: Option<io::Error>,
+}
+
+#[repr(C)]
+struct DecoderDataUninit<R>
+where
+    R: Read + Seek,
+{
+    vorbis: MaybeUninit<vorbisfile_sys::OggVorbis_File>,
     reader: R,
     current_logical_bitstream: libc::c_int,
     read_error: Option<io::Error>,
@@ -120,7 +133,7 @@ where
 
             let ptr = ptr as *mut u8;
 
-            let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
+            let data: &mut DecoderData<R> = unsafe { &mut *(datasource as *mut _) };
 
             let buffer = unsafe { slice::from_raw_parts_mut(ptr as *mut u8, nmemb as usize) };
 
@@ -144,7 +157,7 @@ where
         where
             R: Read + Seek,
         {
-            let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
+            let data: &mut DecoderData<R> = unsafe { &mut *(datasource as *mut _) };
 
             let result = match whence {
                 libc::SEEK_SET => data.reader.seek(io::SeekFrom::Start(offset as u64)),
@@ -163,23 +176,29 @@ where
         where
             R: Read + Seek,
         {
-            let data: &mut DecoderData<R> = unsafe { std::mem::transmute(datasource) };
+            let data: &mut DecoderData<R> = unsafe { &mut *(datasource as *mut DecoderData<R>) };
             data.reader
                 .seek(io::SeekFrom::Current(0))
                 .map(|v| v as libc::c_long)
                 .unwrap_or(-1)
         }
 
-        let callbacks = {
-            let mut callbacks: vorbisfile_sys::ov_callbacks = unsafe { std::mem::zeroed() };
-            callbacks.read_func = read_func::<R>;
-            callbacks.seek_func = seek_func::<R>;
-            callbacks.tell_func = tell_func::<R>;
-            callbacks
+        extern "C" fn close_func<R>(_datasource: *mut libc::c_void) -> libc::c_int
+        where
+            R: Read + Seek,
+        {
+            0
+        }
+
+        let callbacks = vorbisfile_sys::ov_callbacks {
+            read_func: read_func::<R>,
+            seek_func: seek_func::<R>,
+            tell_func: tell_func::<R>,
+            close_func: close_func::<R>,
         };
 
-        let mut data = Box::new(DecoderData {
-            vorbis: unsafe { std::mem::uninitialized() },
+        let mut data = Box::new(DecoderDataUninit {
+            vorbis: MaybeUninit::uninit(),
             reader: input,
             current_logical_bitstream: 0,
             read_error: None,
@@ -187,16 +206,16 @@ where
 
         // initializing
         unsafe {
-            let data_ptr = &mut *data as *mut DecoderData<R>;
-            let data_ptr = data_ptr as *mut libc::c_void;
-            try!(check_errors(vorbisfile_sys::ov_open_callbacks(
+            let data_ptr = data.vorbis.as_mut_ptr();
+            check_errors(vorbisfile_sys::ov_open_callbacks(
+                data_ptr as *mut libc::c_void,
                 data_ptr,
-                &mut data.vorbis,
                 std::ptr::null(),
                 0,
-                callbacks
-            )));
+                callbacks,
+            ))?;
         }
+        let data: Box<DecoderData<R>> = unsafe { std::mem::transmute(data) };
 
         Ok(Decoder { data: data })
     }
@@ -252,7 +271,7 @@ where
                     )
                 };
 
-                let infos: &vorbis_sys::vorbis_info = unsafe { std::mem::transmute(infos) };
+                let infos: &vorbis_sys::vorbis_info = unsafe { &*infos };
 
                 Some(Ok(Packet {
                     data: buffer,
@@ -321,6 +340,7 @@ fn check_errors(code: libc::c_int) -> Result<(), VorbisError> {
     }
 }
 
+#[cfg(feature = "with-encoder")]
 #[derive(Debug)]
 pub enum VorbisQuality {
     VeryHighQuality,
@@ -332,10 +352,12 @@ pub enum VorbisQuality {
     VeryHighPerformance,
 }
 
+#[cfg(feature = "with-encoder")]
 pub struct Encoder {
     e: vorbis_encoder::Encoder,
 }
 
+#[cfg(feature = "with-encoder")]
 impl Encoder {
     pub fn new(channels: u8, rate: u64, quality: VorbisQuality) -> Result<Self, VorbisError> {
         let quality = match quality {
