@@ -9,7 +9,11 @@ license = "Apache-2.0"
 [dependencies]
 libc = "0.2"
 ogg-sys = "0.0.9"
-rand = "0.3"
-vorbis-sys = "0.0.8"
-vorbis-encoder = "0.1"
+rand = "0.8"
+vorbis-sys = "0.1"
 vorbisfile-sys = "0.0.8"
+
+vorbis-encoder = { version = "0.1", optional = true }
+
+[features]
+with-encoder = ["vorbis-encoder"]
